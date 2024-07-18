@@ -1,6 +1,7 @@
 BasedOnStyle: Google
 IndentWidth: 2
 TabWidth: 2
+SortIncludes: false
 UseTab: Never
 AllowShortFunctionsOnASingleLine: false
 BreakBeforeBraces: Custom
@@ -16,7 +17,7 @@ BraceWrapping:
   BeforeCatch: true
   BeforeElse: false
   IndentBraces: false
-ColumnLimit: 0
+ColumnLimit: 120
 PenaltyReturnTypeOnItsOwnLine: 0
 DerivePointerAlignment: false
 PointerAlignment: Left

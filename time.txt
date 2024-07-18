@@ -1,0 +1,5 @@
+Description: This file records the time I spent for labs.
+
+Util
+    - find  : 50mins
+    - xargs : 70mins   

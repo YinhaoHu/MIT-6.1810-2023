@@ -23,7 +23,7 @@ kill(int);
 int
 exec(const char*, char**);
 int
-open(const char*, int);
+open(const char* path, int mode);
 int
 mknod(const char*, short, short);
 int
@@ -51,11 +51,16 @@ uptime(void);
 int
 stat(const char*, struct stat*);
 char*
-strcpy(char*, const char*);
+strcpy(char* dest, const char* src);
 void*
 memmove(void*, const void*, int);
+
+/// @brief Finds th
+/// @param str
+/// @param c
+/// @return
 char*
-strchr(const char*, char c);
+strchr(const char* str, char c);
 int
 strcmp(const char*, const char*);
 void
@@ -77,3 +82,5 @@ int
 memcmp(const void*, const void*, uint);
 void*
 memcpy(void*, const void*, uint);
+
+#define NULL ((void*)0)
