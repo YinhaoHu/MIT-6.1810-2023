@@ -40,6 +40,7 @@ main(int argc, char* argv[]) {
   }
   free(buf);
 
+  arguments[arguments_len] = NULL;
   run_subprocess(executable, arguments);
 
   exit(0);
