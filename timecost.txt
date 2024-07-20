@@ -1,0 +1,8 @@
+Util
+	- find	: 50mins
+	- xargs	: 70mins
+
+Syscall
+	- Using gdb: 90mins (including learning)
+	- System call tracing: 50mins
+	- Sysinfo: 50mins
