@@ -19,6 +19,7 @@ OBJS = \
   $K/trampoline.o \
   $K/trap.o \
   $K/syscall.o \
+  $K/sysinfo.o \
   $K/sysproc.o \
   $K/bio.o \
   $K/fs.o \
@@ -188,6 +189,8 @@ UPROGS=\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
+	$U/_trace\
+	$U/_sysinfotest\
 	$U/_sleep\
 	$U/_pingpong\
 	$U/_primes\

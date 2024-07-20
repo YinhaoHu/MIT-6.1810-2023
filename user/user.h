@@ -3,6 +3,7 @@
 #define NULL ((void*)0)
 
 struct stat;
+struct sysinfo;
 
 // ========================================================================
 //                          System    Call
@@ -131,6 +132,10 @@ sleep(int ticks);
 /// @return The number of ticks since boot.
 int
 uptime(void);
+
+int trace(int mask);
+
+int sysinfo(struct sysinfo *info);
 
 // ========================================================================
 //                              ulib.c
