@@ -1,0 +1,11 @@
+Q1: Which other xv6 system call(s) could be made faster using this shared page? Explain how.
+
+A: SYS_uptime. Add a field in the USYSCALL page, and maps the address of that to the physical address of `ticks` 
+in the kernel trap.c.
+
+Q2: For every leaf page in the vmprint output, explain what it logically contains and what its permission bits are. 
+Figure 3.4 in the xv6 book might be helpful, although note that the figure might have a slightly different set of 
+pages than the init process that's being inspected here.
+
+A: 255-511-(509,510,511) -> USYSCALL page, trapframe page, trampoline page.
+0-0-(0,1,2,3) -> Text page, data page, guard page,stack page.

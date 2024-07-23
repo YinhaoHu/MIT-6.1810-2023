@@ -7,8 +7,7 @@
 #include "proc.h"
 
 uint64
-sys_exit(void)
-{
+sys_exit(void) {
   int n;
   argint(0, &n);
   exit(n);
@@ -16,50 +15,44 @@ sys_exit(void)
 }
 
 uint64
-sys_getpid(void)
-{
+sys_getpid(void) {
   return myproc()->pid;
 }
 
 uint64
-sys_fork(void)
-{
+sys_fork(void) {
   return fork();
 }
 
 uint64
-sys_wait(void)
-{
+sys_wait(void) {
   uint64 p;
   argaddr(0, &p);
   return wait(p);
 }
 
 uint64
-sys_sbrk(void)
-{
+sys_sbrk(void) {
   uint64 addr;
   int n;
 
   argint(0, &n);
   addr = myproc()->sz;
-  if(growproc(n) < 0)
+  if (growproc(n) < 0)
     return -1;
   return addr;
 }
 
 uint64
-sys_sleep(void)
-{
+sys_sleep(void) {
   int n;
   uint ticks0;
-
 
   argint(0, &n);
   acquire(&tickslock);
   ticks0 = ticks;
-  while(ticks - ticks0 < n){
-    if(killed(myproc())){
+  while (ticks - ticks0 < n) {
+    if (killed(myproc())) {
       release(&tickslock);
       return -1;
     }
@@ -69,19 +62,44 @@ sys_sleep(void)
   return 0;
 }
 
-
 #ifdef LAB_PGTBL
 int
-sys_pgaccess(void)
-{
-  // lab pgtbl: your code here.
+sys_pgaccess(void) {
+  // arguments:(start_va, num_of_pages,user_buf_va)
+  uint64 start_va;
+  int num_pages;
+  uint64 access_bits_result_va;
+
+  argaddr(0, &start_va);
+  argint(1, &num_pages);
+  argaddr(2, &access_bits_result_va);
+
+  if (num_pages > 32 || num_pages < 0) {
+    return -1;
+  }
+
+  uint access_bits_temp = 0;
+
+  struct proc* p = myproc();
+
+  for (int pgi = 0; pgi < num_pages; ++pgi) {
+    uint64 va = start_va + pgi * PGSIZE;
+    pte_t* pte = walk(p->pagetable, (uint64)va, 0);
+    if (*pte & PTE_A) {
+      access_bits_temp = access_bits_temp | (1 << pgi);
+      *pte = PTE_A_RESET(*pte);
+    }
+  }
+  if (copyout(p->pagetable, (uint64)access_bits_result_va, (char*)&access_bits_temp, sizeof(uint)) < 0) {
+    return -1;
+  }
+
   return 0;
 }
 #endif
 
 uint64
-sys_kill(void)
-{
+sys_kill(void) {
   int pid;
 
   argint(0, &pid);
@@ -91,8 +109,7 @@ sys_kill(void)
 // return how many clock tick interrupts have occurred
 // since start.
 uint64
-sys_uptime(void)
-{
+sys_uptime(void) {
   uint xticks;
 
   acquire(&tickslock);
