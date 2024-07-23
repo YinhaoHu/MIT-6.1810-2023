@@ -1,8 +1,13 @@
 Util
-	- find	: 50mins
-	- xargs	: 70mins
+	- find	: 50 mins
+	- xargs	: 70 mins
 
 Syscall
-	- Using gdb: 90mins (including learning)
-	- System call tracing: 50mins
-	- Sysinfo: 50mins
+	- Using gdb(including learning): 90 mins 
+	- System call tracing: 50 mins
+	- Sysinfo: 50 mins
+
+Page Tables:
+    - Speed up system calls: 50mins
+    - Print a page table: 50 mins
+    - Detect which pages have been accessed: 45 mins
