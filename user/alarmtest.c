@@ -12,17 +12,23 @@
 #include "kernel/riscv.h"
 #include "user/user.h"
 
-void test0();
-void test1();
-void test2();
-void test3();
-void periodic();
-void slow_handler();
-void dummy_handler();
+void
+test0();
+void
+test1();
+void
+test2();
+void
+test3();
+void
+periodic();
+void
+slow_handler();
+void
+dummy_handler();
 
 int
-main(int argc, char *argv[])
-{
+main(int argc, char* argv[]) {
   test0();
   test1();
   test2();
@@ -33,8 +39,7 @@ main(int argc, char *argv[])
 volatile static int count;
 
 void
-periodic()
-{
+periodic() {
   count = count + 1;
   printf("alarm!\n");
   sigreturn();
@@ -43,28 +48,28 @@ periodic()
 // tests whether the kernel calls
 // the alarm handler even a single time.
 void
-test0()
-{
+test0() {
   int i;
   printf("test0 start\n");
   count = 0;
   sigalarm(2, periodic);
-  for(i = 0; i < 1000*500000; i++){
-    if((i % 1000000) == 0)
+  for (i = 0; i < 1000 * 500000; i++) {
+    if ((i % 1000000) == 0)
       write(2, ".", 1);
-    if(count > 0)
+    if (count > 0)
       break;
   }
   sigalarm(0, 0);
-  if(count > 0){
+  if (count > 0) {
     printf("test0 passed\n");
   } else {
     printf("\ntest0 failed: the kernel never called the alarm handler\n");
   }
 }
 
-void __attribute__ ((noinline)) foo(int i, int *j) {
-  if((i % 2500000) == 0) {
+void __attribute__((noinline))
+foo(int i, int* j) {
+  if ((i % 2500000) == 0) {
     write(2, ".", 1);
   }
   *j += 1;
@@ -79,8 +84,7 @@ void __attribute__ ((noinline)) foo(int i, int *j) {
 // held when the interrupt occurred.
 //
 void
-test1()
-{
+test1() {
   int i;
   int j;
 
@@ -88,14 +92,14 @@ test1()
   count = 0;
   j = 0;
   sigalarm(2, periodic);
-  for(i = 0; i < 500000000; i++){
-    if(count >= 10)
+  for (i = 0; i < 500000000; i++) {
+    if (count >= 10)
       break;
     foo(i, &j);
   }
-  if(count < 10){
+  if (count < 10) {
     printf("\ntest1 failed: too few calls to the handler\n");
-  } else if(i != j){
+  } else if (i != j) {
     // the loop should have called foo() i times, and foo() should
     // have incremented j once per call, so j should equal i.
     // once possible source of errors is that the handler may
@@ -112,8 +116,7 @@ test1()
 //
 // tests that kernel does not allow reentrant alarm calls.
 void
-test2()
-{
+test2() {
   int i;
   int pid;
   int status;
@@ -125,10 +128,10 @@ test2()
   if (pid == 0) {
     count = 0;
     sigalarm(2, slow_handler);
-    for(i = 0; i < 1000*500000; i++){
-      if((i % 1000000) == 0)
+    for (i = 0; i < 1000 * 500000; i++) {
+      if ((i % 1000000) == 0)
         write(2, ".", 1);
-      if(count > 0)
+      if (count > 0)
         break;
     }
     if (count == 0) {
@@ -144,16 +147,15 @@ test2()
 }
 
 void
-slow_handler()
-{
+slow_handler() {
   count++;
   printf("alarm!\n");
   if (count > 1) {
     printf("test2 failed: alarm handler called more than once\n");
     exit(1);
   }
-  for (int i = 0; i < 1000*500000; i++) {
-    asm volatile("nop"); // avoid compiler optimizing away loop
+  for (int i = 0; i < 1000 * 500000; i++) {
+    asm volatile("nop");  // avoid compiler optimizing away loop
   }
   sigalarm(0, 0);
   sigreturn();
@@ -163,8 +165,7 @@ slow_handler()
 // dummy alarm handler; after running immediately uninstall
 // itself and finish signal handling
 void
-dummy_handler()
-{
+dummy_handler() {
   sigalarm(0, 0);
   sigreturn();
 }
@@ -173,8 +174,7 @@ dummy_handler()
 // tests that the return from sys_sigreturn() does not
 // modify the a0 register
 void
-test3()
-{
+test3() {
   uint64 a0;
 
   sigalarm(1, dummy_handler);
@@ -182,11 +182,10 @@ test3()
 
   asm volatile("lui a5, 0");
   asm volatile("addi a0, a5, 0xac" : : : "a0");
-  for(int i = 0; i < 500000000; i++)
-    ;
-  asm volatile("mv %0, a0" : "=r" (a0) );
+  for (int i = 0; i < 500000000; i++);
+  asm volatile("mv %0, a0" : "=r"(a0));
 
-  if(a0 != 0xac)
+  if (a0 != 0xac)
     printf("test3 failed: register a0 changed\n");
   else
     printf("test3 passed\n");
