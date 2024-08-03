@@ -1,0 +1,11 @@
+Consider in a moment just after the program started two threads begin to put
+two keys which are in the same bucket which is empty now. In the sequence below:
+
+time:
+
+T1  : Begin to insert bucket 0 -> update the bucket head
+
+T2  : Begin to insert bucket 0 -> update the bucket head
+
+
+now, the bucket head is one of the key but missing one.
