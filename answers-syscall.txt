@@ -1,6 +1,0 @@
-usertrap
-7 It represents the number of the syscall whose name is SYS_exec in `syscall.h`
-machine mode
-lw	a3,0(zero), a3   
-load page fault(refer to /riscv-privileged-20211203 table 4.2), the address 0 is not mapped to kernel.
-kernel/kernel, the pid is 0
