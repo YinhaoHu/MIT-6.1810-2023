@@ -503,3 +503,180 @@ sys_pipe(void)
   }
   return 0;
 }
+
+uint64
+sys_mmap(void) {
+  // Assume addr is 0 in lab.
+  void* addr;
+  // Number of bytes to map, might not be the same len as file's.
+  size_t len;
+  // prot: PROT_READ or/and PROT_WRITE.
+  // flags: MAP_SHARED or MAP_PRIVATE. Write modifications to file or not.
+  // fd: open file to map.
+  int prot, flags, fd;
+  // offset: assume it 0 in lab.
+  off_t offset;
+  struct file* file;
+
+  argaddr(0, (uint64*)&addr);
+  argaddr(1, &len);
+  argint(2, &prot);
+  argint(3, &flags);
+  if (argfd(4, &fd, &file) < 0) {
+    printf("[ERROR] sysfile.c/sys_mmap: argfd\n");
+    return -1;
+  };
+  argaddr(5, (unsigned long*)&offset);
+
+  // No rw mapping to a read-only file.
+  if ((file->writable == 0) && (prot & PROT_WRITE) && (flags & MAP_SHARED)) {
+    return -1;
+  }
+
+  struct proc* p = myproc();
+  struct vma* vmap;
+  int i;
+
+  // find vma
+  for (i = 0; i < NOVMA; ++i) {
+    if (p->vmas[i].file == 0 && p->vmas[i].addr == 0) {
+      vmap = &p->vmas[i];
+      break;
+    }
+  }
+  if (i == NOVMA) {
+    printf("[ERROR] sysfile.c/sys_mmap: i==NOVMA\n");
+    return -1;
+  }
+
+  filedup(file);
+  // set vma
+  vmap->file = file;
+  vmap->len = len;
+  vmap->flags = flags;
+  vmap->addr = p->sz;
+
+  // allocate a virtual address
+  size_t aligned_len = PGROUNDUP(len);
+  p->sz += aligned_len;
+
+  // do not make the pte valid, make it valid in user trap and alloc mem
+  int pte_flags = 0;
+  if (prot & PROT_READ) {
+    pte_flags |= PTE_R;
+  }
+  if (prot & PROT_WRITE) {
+    pte_flags |= PTE_W;
+  }
+
+  uint64 va = vmap->addr;
+  if (mappages(p->pagetable, va, aligned_len, 0, pte_flags) < 0) {
+    fileclose(vmap->file);
+    printf("[ERROR] sysfile.c/sys_mmap: mappages\n");
+    return -1;
+  };
+#ifdef ALLOW_DEBUG
+  printf(
+      "[DEBUG] sysfile.c/sys_mmap: pid=%d, OK[va_start=%p, va_end=%p].\n", p->pid, vmap->addr, vmap->addr + vmap->len);
+#endif
+  return vmap->addr;
+}
+
+int
+check_all_unmapped(struct vma* vmap, pagetable_t pagetable) {
+  uint64 va_end = vmap->addr + vmap->len;
+  int all_freed = 1;
+  pte_t* pte;
+
+  for (uint64 va = vmap->addr; va < va_end; va += PGSIZE) {
+    pte = walk(pagetable, va, 0);
+    if (*pte) {
+      all_freed = 0;
+      break;
+    }
+  }
+  return all_freed;
+}
+
+uint64
+sys_munmap_internal(uint64 addr, size_t size) {
+#ifdef ALLOW_DEBUG
+  printf("[TRACE] sysfile.c/sys_munmap_internal: addr=%p, size=%p\n", addr, size);
+#endif
+  struct proc* p = myproc();
+
+  // Find the vmap.
+  struct vma* vmap = 0;
+  for (int i = 0; i < NOVMA; ++i) {
+    vmap = &p->vmas[i];
+
+    if ((vmap->addr <= addr) && ((vmap->addr + vmap->len) >= (addr + size))) {
+      if (vmap->file == 0) {
+        return 0;
+      }
+      break;
+    }
+    vmap = 0;
+  }
+  if (vmap == 0) {
+    printf("[ERROR] sysfile.c/sys_munmap: unexpected addr(%p) and size(%p).\n", addr, size);
+    return -1;
+  }
+
+  if (vmap->flags & MAP_SHARED) {
+    begin_op();
+    ilock(vmap->file->ip);
+
+    for (uint64 va = addr; va < addr + size; va += PGSIZE) {
+      pte_t* pte = walk(p->pagetable, va, 0);
+      if (*pte == 0) {
+        continue;
+      }
+      int res = writei(vmap->file->ip, 1, va, va - vmap->addr, PGSIZE);
+      if (res < 0) {
+        printf("[ERROR] sysfile.c/sys_munmap: writei for addr=%p, size=%p,res = %d, file=%p\n", addr, size, res,
+            vmap->file);
+        return -1;
+      }
+    }
+    iunlock(vmap->file->ip);
+    end_op();
+  }
+
+  int all_unmapped = check_all_unmapped(vmap, p->pagetable);
+
+  if (all_unmapped) {
+    return 0;
+  }
+
+  uint64 va = addr;
+  uint64 va_end = va + size;
+  for (; va < va_end; va += PGSIZE) {
+    pte_t* pte = walk(p->pagetable, va, 0);
+    if (*pte) {
+      uvmunmap(p->pagetable, va, 1, 1);
+    }
+  }
+
+  // Decr the refcnt if removes all.
+  if (!all_unmapped) {
+    all_unmapped = check_all_unmapped(vmap, p->pagetable);
+    if (all_unmapped) {
+      fileclose(vmap->file);
+      vmap->file = 0;
+    }
+  }
+
+  return 0;
+}
+
+uint64
+sys_munmap(void) {
+  uint64 addr;
+  size_t size;
+
+  argaddr(0, &addr);
+  argaddr(1, &size);
+
+  return sys_munmap_internal(addr, size);
+}

@@ -5,6 +5,10 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -68,9 +72,54 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
-    printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
-    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
-    setkilled(p);
+    uint64 stval = r_stval();
+    uint64 scause = r_scause();
+
+    // Is this a first access to mapped memory?
+    int i;
+    for (i = 0; i < NOVMA; ++i) {
+      uint64 start, end;
+      start = p->vmas[i].addr;
+      end = p->vmas[i].len + start;
+      if (start <= stval && stval < end) {
+#ifdef ALLOW_DEBUG
+        printf("[DEBUG] trap.c/usertrap: find a mmaped page access for address %p , scause %p.\n", stval, scause);
+#endif
+        break;
+      }
+    }
+
+    // This is a first access to mapped memory.
+    if (i < NOVMA) {
+      struct vma* vmap = &p->vmas[i];
+
+      pte_t* pte;
+      int pte_flags;
+      uint64 va;
+      uint64 end_va = vmap->addr + vmap->len;
+      ilock(vmap->file->ip);
+      for (va = vmap->addr; va < end_va; va += PGSIZE) {
+        uint64 pa = (uint64)kalloc();
+        // TODO: Ensure this is correct.
+        memset((void*)pa, 0, PGSIZE);
+
+        pte = walk(p->pagetable, va, 0);
+        pte_flags = PTE_FLAGS(*pte) | PTE_U;
+#ifdef ALLOW_DEBUG
+        printf("[DEBUG] trap.c/usertrap: va=%p\n", va);
+#endif
+        *pte = PA2PTE(pa) | pte_flags | PTE_V;
+
+        if (readi(vmap->file->ip, 0, pa, va - vmap->addr, PGSIZE) < 0) {
+          printf("[ERROR] trap.c/usertrap: readi failed.\n");
+        }
+      }
+      iunlock(vmap->file->ip);
+    } else {
+      printf("usertrap(): unexpected scause %p pid=%d\n", scause, p->pid);
+      printf("            sepc=%p stval=%p\n", r_sepc(), stval);
+      setkilled(p);
+    }
   }
 
   if(killed(p))

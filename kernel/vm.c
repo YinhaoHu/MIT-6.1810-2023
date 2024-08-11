@@ -183,16 +183,27 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
   if((va % PGSIZE) != 0)
     panic("uvmunmap: not aligned");
 
-  for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
+  for (a = va; a < va + npages * PGSIZE; a += PGSIZE) {
     if((pte = walk(pagetable, a, 0)) == 0)
       panic("uvmunmap: walk");
-    if((*pte & PTE_V) == 0)
-      panic("uvmunmap: not mapped");
-    if(PTE_FLAGS(*pte) == PTE_V)
+    if ((*pte & PTE_V) == 0) {
+      // If this pte is not valid for the only reason it is freed by munmap, this would be correct.
+#ifdef ALLOW_DEBUG
+      printf("[DEBUG] vm.c/uvmunmap: not mapped %p\n", a);
+#endif
+      continue;
+    }
+
+    if (PTE_FLAGS(*pte) == PTE_V) {
+      printf("not a leaf: %p, flags=%p\n", a, PTE_FLAGS(*pte));
       panic("uvmunmap: not a leaf");
+    }
     if(do_free){
       uint64 pa = PTE2PA(*pte);
-      kfree((void*)pa);
+      // If pa == 0 occurs for the only reason that this zero pa is set by mmap, this would be correct.
+      if (pa != 0) {
+        kfree((void*)pa);
+      }
     }
     *pte = 0;
   }
@@ -310,8 +321,7 @@ uvmfree(pagetable_t pagetable, uint64 sz)
 // returns 0 on success, -1 on failure.
 // frees any allocated pages on failure.
 int
-uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
-{
+uvmcopy(pagetable_t old, pagetable_t new, uint64 sz, uint64* mapped_regions[16]) {
   pte_t *pte;
   uint64 pa, i;
   uint flags;
@@ -320,8 +330,29 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
-    if((*pte & PTE_V) == 0)
+
+    int vma_i;
+    for (vma_i = 0; vma_i < NOVMA; ++vma_i) {
+      uint64 start = mapped_regions[vma_i][0];
+      uint64 end = mapped_regions[vma_i][1];
+
+      if (start <= i && i < end) {
+        break;
+      }
+    }
+    if (vma_i < NOVMA) {
+      flags = PTE_FLAGS(*pte);
+      flags &= (~PTE_U);
+      mappages(new, i, PGSIZE, 0, flags);
+      pte_t* new_pte = walk(new, i, 0);
+      *new_pte = PA2PTE(0) | flags;
+      continue;
+    }
+
+    if ((*pte & PTE_V) == 0) {
+      printf("[ERROR] vm.c/uvmcopy: not present %p.\n", i);
       panic("uvmcopy: page not present");
+    }
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
     if((mem = kalloc()) == 0)
@@ -337,7 +368,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
  err:
   uvmunmap(new, 0, i / PGSIZE, 1);
   return -1;
-}
+ }
 
 // mark a PTE invalid for user access.
 // used by exec for the user stack guard page.

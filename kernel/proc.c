@@ -140,6 +140,9 @@ found:
     return 0;
   }
 
+  // Initialize virtual memory areas.
+  memset(&p->vmas, 0, sizeof(p->vmas));
+
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -288,8 +291,25 @@ fork(void)
     return -1;
   }
 
+  uint64 mapped_regions[16][2];
+
+  for (int i = 0; i < NOVMA; ++i) {
+    np->vmas[i] = p->vmas[i];
+
+    mapped_regions[i][0] = p->vmas[i].addr;
+    mapped_regions[i][1] = p->vmas[i].addr + p->vmas[i].len;
+
+    if (np->vmas[i].file) {
+      filedup(np->vmas[i].file);
+    }
+  }
+
+  uint64* pp[16];
+  for (int i = 0; i < 16; ++i) {
+    pp[i] = mapped_regions[i];
+  }
   // Copy user memory from parent to child.
-  if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
+  if (uvmcopy(p->pagetable, np->pagetable, p->sz, pp) < 0) {
     freeproc(np);
     release(&np->lock);
     return -1;
@@ -340,6 +360,9 @@ reparent(struct proc *p)
   }
 }
 
+extern uint64
+sys_munmap_internal(uint64 addr, size_t size);
+
 // Exit the current process.  Does not return.
 // An exited process remains in the zombie state
 // until its parent calls wait().
@@ -347,14 +370,34 @@ void
 exit(int status)
 {
   struct proc *p = myproc();
-
-  if(p == initproc)
+  if (p == initproc)
     panic("init exiting");
 
+  struct vma* vmap;
+#ifdef ALLOW_DEBUG
+  printf("[TRACE] proc.c/exit: exit.\n");
+#endif
+  for (int i = 0; i < NOVMA; ++i) {
+    vmap = &p->vmas[i];
+    if (vmap->file == 0) {
+      continue;
+    }
+
+    pte_t* pte = walk(p->pagetable, vmap->addr, 0);
+    if ((*pte & PTE_U) == 0) {
+      continue;
+    }
+
+    if (sys_munmap_internal(vmap->addr, vmap->len) < 0) {
+      printf("[ERROR] proc.c/exit: should not munmap error.\n");
+      panic("munmap error in exit.\n");
+    }
+  }
+
   // Close all open files.
-  for(int fd = 0; fd < NOFILE; fd++){
-    if(p->ofile[fd]){
-      struct file *f = p->ofile[fd];
+  for (int fd = 0; fd < NOFILE; fd++) {
+    if (p->ofile[fd]) {
+      struct file* f = p->ofile[fd];
       fileclose(f);
       p->ofile[fd] = 0;
     }
